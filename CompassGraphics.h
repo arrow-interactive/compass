@@ -757,7 +757,7 @@ Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 r
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 }
 
-void
+u32
 Compass_GetUniformLocation(u32 programId, s8* name)
 {
     u32 location = -1;
