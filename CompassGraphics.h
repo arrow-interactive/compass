@@ -197,6 +197,11 @@ typedef struct  {
     
 } compass_text_t;
 
+typedef struct {
+    s8 *key;
+    u32 value;
+} compass_uniform_cache_t;
+
 typedef enum {
     COMPASS_IMAGE_Png,
     COMPASS_IMAGE_Jpg,
@@ -210,7 +215,6 @@ typedef enum
     COMPASS_DRAW_Points = 1,
     COMPASS_DRAW_Line = 2
 } compass_draw_mode_t;
-
 
 
 typedef enum {
@@ -753,13 +757,32 @@ Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 r
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 }
 
+u32
+Compass_GetUniformLocation(u32 programId, s8* name)
+{
+    u32 location = -1;
+
+    static u64 last = 0;
+    static compass_uniform_cache_t locations[128] = {};
+    for (int i = 0; i < 128; ++i)
+        if (locations[i].key == name)
+            location = locations[i].value;
+
+    if (location == -1)
+    {
+        location = glGetUniformLocation(programId, name);
+        locations[last++] = (compass_uniform_cache_t) { name, location };
+    }
+
+    return location;   
+}
 
 void 
 Compass_ShaderUniform1i(compass_shader_t* shader, s8* location , s32 _val)
 {
     compass_opengl_shader_handle_t* handle  = (compass_opengl_shader_handle_t*)shader->shader_handle.handle;
     
-    u32 loc = glGetUniformLocation(handle->program, location);
+    u32 loc = Compass_GetUniformLocation(handle->program, location);
     
     
     glUniform1i(loc, _val);
@@ -926,7 +949,7 @@ Compass_ShaderUniformM4(compass_shader_t* shader, s8* location, f32* matrix)
     compass_opengl_shader_handle_t* handle  = (compass_opengl_shader_handle_t*)shader->shader_handle.handle;
     
     Compass_UseShader(shader);
-    int loc =glGetUniformLocation(handle->program, location);
+    int loc = Compass_GetUniformLocation(handle->program, location);
     
     glUniformMatrix4fv(loc, 1, GL_FALSE, (f32*)matrix);
 }
@@ -1687,7 +1710,7 @@ Compass_ShaderUniformSampler2D(compass_shader_t* shader, s8* location , compass_
     compass_opengl_shader_handle_t* handle  = (compass_opengl_shader_handle_t*)shader->shader_handle.handle;
     
     Compass_UseShader(shader);
-    glUniform1f(glGetUniformLocation(handle->program, location), val->texture);
+    glUniform1f(Compass_GetUniformLocation(handle->program, location), val->texture);
     Compass_UseShader(shader);
 }
 
