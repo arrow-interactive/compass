@@ -45,7 +45,7 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 #define  COMPASS_PRINTF printf
 #endif
 
-#define COMPASS_VERSION "Compass Framework <1.0>" 
+#define COMPASS_VERSION "Compass Framework <1.1>" 
 #define COMPASS_DEVELOPMENT_BUILD 0
 
 
@@ -157,6 +157,11 @@ typedef struct
 } compass_vertex_t;
 
 typedef struct {
+    s8 *key;
+    u32 value;
+} compass_uniform_cache_t;
+
+typedef struct {
     f32 w;
     f32 h;
     f32 x;
@@ -165,42 +170,15 @@ typedef struct {
     compass_texture_t texture;
 } compass_rect_t;
 
-typedef struct
-{
-    u32 texture_id;
-    v2 advance;
-    v2 size;
-    v2 bearing;
-} compass_glyph_info_t;
-
-typedef struct
-{
-    s8 chars;
-    compass_glyph_info_t glyph;
-} compass_glyph_t;
-
-typedef struct  {
-    s8 *text;
-    s8 *font;
-    u32 length;
-    f32 x;
-    f32 y;
-    f32 scale;
-    f32 size;
-    f32 orgin_x;
-    f32 tabs;
-    Color color;
-    u32 advanced_x;
-    compass_glyph_t* glyph;
-    u32 glyph_used;
-    u32 glyph_size;
-    
-} compass_text_t;
-
 typedef struct {
-    s8 *key;
-    u32 value;
-} compass_uniform_cache_t;
+    f32 x0;
+    f32 y0;
+    f32 x1;
+    f32 y1;
+    Color color;
+    
+} compass_line_t;
+
 
 typedef enum {
     COMPASS_IMAGE_Png,
@@ -213,8 +191,10 @@ typedef enum
 {
     COMPASS_DRAW_Triangle = 0,
     COMPASS_DRAW_Points = 1,
-    COMPASS_DRAW_Line = 2
+    COMPASS_DRAW_Line = 2,
+    COMPASS_DRAW_TriangleFan = 3
 } compass_draw_mode_t;
+
 
 
 typedef enum {
@@ -266,30 +246,22 @@ COMPASS_API void
 Compass_SetShaderViewRotate(compass_shader_t* shader,compass_view_t* view, f32 rotate);
 COMPASS_API void
 Compass_SetShaderViewScale(compass_shader_t* shader,compass_view_t* view, f32 scale);
-COMPASS_API compass_text_t
-Compass_CreateText(s8* text, s8* font, f32 x, f32 y, u32 size);
 COMPASS_API compass_rect_t
 Compass_CreateRectangle(f32 w, f32 h, f32 x, f32 y );
-COMPASS_API void
-Compass_SetTextSize(compass_text_t* text, u32 size);
-COMPASS_API void
-Compass_DrawText(compass_text_t text, compass_renderer_t renderer);
 COMPASS_API void
 Compass_M4xM4(m4 a , m4 b, m4 sum);
 COMPASS_API void
 Compass_Viewport(f32 x, f32 y, f32 w, f32 h);
-COMPASS_API void
-Compass_FreeText(compass_text_t* text);
 COMPASS_API compass_renderer_t 
 Compass_CreateRenderer(u32 w , u32 h);
 COMPASS_API void
 Compass_FreeRenderer(compass_renderer_t* renderer);
-COMPASS_API compass_texture_t 
-Compass_LoadTextTexture(f32 w, f32 h , unsigned char* bytes);
 COMPASS_API void 
 Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer);
-COMPASS_API void 
-Compass_DrawVertices(compass_draw_mode_t mode, compass_vertex_t* vertices, f32 size, f32 vertex_count, compass_renderer_t renderer);
+COMPASS_API compass_line_t
+Compass_CreateLine(f32 x , f32 y, f32 x1 , f32 y1);
+COMPASS_API void
+Compass_DrawLine(compass_line_t line, compass_renderer_t renderer);
 COMPASS_API void 
 Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 rotation); /* NOTE(@rxx) Rotation is in radians. */
 COMPASS_API void 
@@ -317,8 +289,6 @@ Compass_CreateFramebuffer(f32 w, f32 h, compass_framebuffer_t* framebuffer_objec
                           compass_format_t color_model, u32 index);
 COMPASS_API void
 Compass_CreateRenderbuffer(compass_framebuffer_t* framebuffer);
-COMPASS_API void
-Compass_DrawTextRot(compass_text_t text, compass_renderer_t renderer, f32 rotation);
 COMPASS_API void 
 Compass_BindDefaultFrameBuffer();
 COMPASS_API u32 
@@ -337,6 +307,17 @@ COMPASS_API void
 Compass_TranslateM4(m4 matrix, v2 translation);
 COMPASS_API s8*
 Compass_GetVersion();
+COMPASS_API void
+Compass_BeginDrawing(compass_renderer_t renderer );
+COMPASS_API void
+Compass_PushVertex(f32* vertices, s32 size,  compass_renderer_t renderer );
+COMPASS_API void
+Compass_EndDrawing(compass_draw_mode_t draw_mode, compass_renderer_t renderer, f32 vertex_count );
+COMPASS_API void 
+Compass_BeginTexture(compass_renderer_t renderer, compass_texture_t texture);
+COMPASS_API void 
+Compass_EndTexture();
+
 
 #ifdef COMPASS_IMPL_GFX
 
@@ -366,14 +347,12 @@ f32 Compass_Clamp(f32 value, f32 min_, f32 max_)
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
-#include <ft2build.h>
-#include FT_FREETYPE_H  
-
 
 
 
 typedef struct {
     u32 vbo,vao;
+    s32 buffersize;
 } compass_opengl_handle_t;
 
 typedef struct {
@@ -438,10 +417,8 @@ Compass_CreateRenderer(u32 w , u32 h)
         "in  vec2 texc;\n"
         "in float UsingTexture;\n"
         "uniform sampler2D _texture2d;\n"
-        
         "void main() {\n"
         "if (UsingTexture == 1 ) {"
-        
         "OutColor = texture(_texture2d, texc) * color;\n"
         "}\n"
         "else if (UsingTexture == 2 ) {\n"
@@ -449,7 +426,6 @@ Compass_CreateRenderer(u32 w , u32 h)
         "OutColor =  sampled * color;\n"
         "}\n"
         "else { \n"
-        
         "OutColor = vec4(color.rgba);\n"
         "}\n"
         "}\n\0";
@@ -459,11 +435,11 @@ Compass_CreateRenderer(u32 w , u32 h)
     
     
     
-    
     glGenBuffers(1, &handle->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
-    u32 size = 2040;
+    u32 size = 2024 * sizeof(float);
     glBufferData(GL_ARRAY_BUFFER, sizeof(compass_vertex_t) * size , (void*)0, GL_DYNAMIC_DRAW);
+    handle->buffersize = size;
     
     glGenVertexArrays(1, &handle->vao);
     glBindVertexArray(handle->vao);
@@ -494,6 +470,39 @@ Compass_CreateRenderer(u32 w , u32 h)
 }
 
 
+u32
+Compass_GetUniformLocation(u32 programId, s8* name)
+{
+    u32 location = -1;
+    
+    static u64 last = 0;
+    static compass_uniform_cache_t locations[128] = {0};
+    for (int i = 0; i < 128; ++i)
+        if (locations[i].key == name)
+        location = locations[i].value;
+    
+    if (location == -1)
+    {
+        location = glGetUniformLocation(programId, name);
+        locations[last++] = (compass_uniform_cache_t) { name, location };
+    }
+    
+    return location;   
+}
+
+compass_line_t
+Compass_CreateLine(f32 x , f32 y, f32 x1 , f32 y1)
+{
+    compass_line_t line;
+    line.x0 = x;
+    line.y0 = y;
+    line.x1 = x1;
+    line.y1 = y1;
+    line.color = (Color){255,255,255,255};
+    
+    
+    return line;
+}
 void
 Compass_ReloadShaderUniforms(compass_shader_t* shader, u32 w, u32 h)
 {
@@ -537,42 +546,6 @@ Compass_CreateRectangle(f32 w, f32 h, f32 x, f32 y )
 
 
 void 
-Compass_DrawVertices(compass_draw_mode_t mode, compass_vertex_t* vertices, f32 size, f32 vertex_count,compass_renderer_t renderer)
-{
-    
-    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
-    
-    
-    
-    GLenum def_mode;                             
-    switch (mode)
-    {
-        case COMPASS_DRAW_Triangle:
-        {
-            def_mode = GL_TRIANGLES;
-        } break;
-        
-        case COMPASS_DRAW_Points:
-        {
-            def_mode = GL_POINTS;
-        } break;
-        case COMPASS_DRAW_Line:
-        {
-            def_mode = GL_LINES;
-        } break;
-        
-    }
-    
-    
-    
-    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), &vertices);
-    glBindVertexArray(handle->vao);
-    
-    glDrawArrays(def_mode, 0, size);
-    
-}
-void 
 Compass_UseShader(compass_shader_t* shader)
 {
     compass_opengl_shader_handle_t* handle  = (compass_opengl_shader_handle_t*)shader->shader_handle.handle;
@@ -581,12 +554,11 @@ Compass_UseShader(compass_shader_t* shader)
 void 
 Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer)
 {
-    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
     
     if (rectangle.texture.texture_State){
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, rectangle.texture.texture);
-    }
+        Compass_BeginTexture(renderer, rectangle.texture);
+    } 
+    
     
     f32 vertex_data[] = {
         rectangle.x,rectangle.y +  rectangle.h,0,
@@ -626,13 +598,11 @@ Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer)
             
     };  
     
-    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
+    Compass_BeginDrawing(renderer);
+    Compass_PushVertex(vertex_data, sizeof(vertex_data),  renderer );
+    Compass_EndDrawing(COMPASS_DRAW_TriangleFan,renderer, 4);
+    Compass_EndTexture();
     
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_data), vertex_data);
-    
-    
-    glBindVertexArray(handle->vao);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 }
 
 
@@ -640,12 +610,10 @@ Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer)
 void 
 Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 rotation)
 {
-    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
+    
     
     if (rectangle.texture.texture_State){
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, rectangle.texture.texture);
-        
+        Compass_BeginTexture(renderer, rectangle.texture);
     } 
     
     
@@ -748,34 +716,12 @@ Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 r
             
     };  
     
-    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
-    
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_data), vertex_data);
-    
-    
-    glBindVertexArray(handle->vao);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    Compass_BeginDrawing(renderer);
+    Compass_PushVertex(vertex_data, sizeof(vertex_data),  renderer );
+    Compass_EndDrawing(COMPASS_DRAW_TriangleFan,renderer, 4);
+    Compass_EndTexture();
 }
 
-u32
-Compass_GetUniformLocation(u32 programId, s8* name)
-{
-    u32 location = -1;
-
-    static u64 last = 0;
-    static compass_uniform_cache_t locations[128] = {};
-    for (int i = 0; i < 128; ++i)
-        if (locations[i].key == name)
-            location = locations[i].value;
-
-    if (location == -1)
-    {
-        location = glGetUniformLocation(programId, name);
-        locations[last++] = (compass_uniform_cache_t) { name, location };
-    }
-
-    return location;   
-}
 
 void 
 Compass_ShaderUniform1i(compass_shader_t* shader, s8* location , s32 _val)
@@ -885,6 +831,84 @@ Compass_V4xM4(v4* vector  , m4 matrix)
     return res;
 }
 
+void
+Compass_BeginDrawing(compass_renderer_t renderer )
+{
+    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
+    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
+}
+
+
+
+void
+Compass_PushVertex(f32* vertices, s32 size ,  compass_renderer_t renderer )
+{
+    
+    
+    glBufferSubData(GL_ARRAY_BUFFER, 0, size, vertices);
+}
+
+
+
+void
+Compass_EndDrawing(compass_draw_mode_t draw_mode, compass_renderer_t renderer, f32 vertex_count )
+{
+    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
+    GLenum mode;
+    switch (draw_mode)
+    {
+        case (COMPASS_DRAW_Triangle ):
+        {
+            mode = GL_TRIANGLES;
+        } break;
+        
+        
+        case (COMPASS_DRAW_Points ):
+        {
+            mode = GL_POINTS;
+        } break;
+        
+        
+        case (COMPASS_DRAW_Line ):
+        {
+            mode = GL_LINES;
+            
+        } break;
+        
+        
+        case (COMPASS_DRAW_TriangleFan):
+        {
+            mode = GL_TRIANGLE_FAN;
+            
+        } break;
+        
+        default : 
+        {
+            mode= GL_TRIANGLE_FAN;
+        }
+    }
+    glBindVertexArray(handle->vao);
+    glDrawArrays(mode, 0, vertex_count);
+}
+
+
+
+void 
+Compass_BeginTexture(compass_renderer_t renderer, compass_texture_t texture)
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture.texture);
+    
+    
+}
+
+void 
+Compass_EndTexture()
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 
 
 compass_shader_t
@@ -949,7 +973,7 @@ Compass_ShaderUniformM4(compass_shader_t* shader, s8* location, f32* matrix)
     compass_opengl_shader_handle_t* handle  = (compass_opengl_shader_handle_t*)shader->shader_handle.handle;
     
     Compass_UseShader(shader);
-    int loc = Compass_GetUniformLocation(handle->program, location);
+    int loc =Compass_GetUniformLocation(handle->program, location);
     
     glUniformMatrix4fv(loc, 1, GL_FALSE, (f32*)matrix);
 }
@@ -1020,10 +1044,11 @@ Compass_CreateTexture(s8* file_name, compass_image_flags_t imgFormat)
     
 }
 
-COMPASS_API compass_texture_t 
+COMPASS_API compass_texture_t
 Compass_LoadTextTexture(f32 w, f32 h , unsigned char* bytes)
 {
     compass_texture_t texture;
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); 
     
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -1050,356 +1075,6 @@ Compass_LoadTextTexture(f32 w, f32 h , unsigned char* bytes)
     
     return texture;
 }
-compass_text_t
-Compass_CreateText(s8* text, s8* font, f32 x, f32 y, u32 size )
-{
-    
-    
-    compass_text_t textObj = {0};
-    textObj.text = text;
-    textObj.font = font;
-    textObj.x    = x;
-    textObj.y    = y;
-    textObj.scale= 1;
-    textObj.glyph= COMPASS_MALLOC(sizeof(compass_glyph_t) * 25);
-    textObj.glyph_size = 25;
-    textObj.glyph_used = 0;
-    
-    
-    FT_Library flib;
-    if (FT_Init_FreeType(&flib))
-    {
-        
-        COMPASS_PRINTF("[compass:ft] Failed to initialize freetype library.\n");
-        COMPASS_PRINTF("[compass:ft] Font failed to load.\n");
-    }
-    
-    FT_Face face;
-    if (FT_New_Face(flib, font, 0, &face))
-    {
-        COMPASS_PRINTF("[compass:ft] Failed to load font \"%s\".\n", font);
-        COMPASS_PRINTF("[compass:ft] Font failed to load.\n");
-    }
-    
-    textObj.size = size;
-    FT_Set_Pixel_Sizes(face, 0, textObj.size);  
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); 
-    
-    
-    for (u8 c = 0; c < 128;c++)
-    {
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
-        {
-            COMPASS_PRINTF("[compass:ft] : Failed to load font glyph <%c>\n", c);
-        }
-        
-        
-        
-        compass_texture_t texture =  Compass_LoadTextTexture(face->glyph->bitmap.width, face->glyph->bitmap.rows ,face->glyph->bitmap.buffer);
-        
-        
-        glGenerateMipmap(GL_TEXTURE_2D);
-        
-        if (textObj.glyph_used >= textObj.glyph_size)
-        {
-            textObj.glyph_size *= 2;
-            textObj.glyph = COMPASS_REALLOC ( textObj.glyph, sizeof(compass_glyph_t) * textObj.glyph_size);
-        }
-        
-        compass_glyph_info_t push = 
-        {
-            texture.texture,
-            (v2){face->glyph->advance.x,face->glyph->advance.y},
-            (v2){face->glyph->bitmap.width,face->glyph->bitmap.rows },
-            (v2){face->glyph->bitmap_left,face->glyph->bitmap_top }
-            
-        };
-        compass_glyph_t final = 
-        {
-            c,
-            push
-        };
-        textObj.glyph[textObj.glyph_used++] = final;
-        
-        
-        
-        glBindTexture(GL_TEXTURE_2D, 0); 
-    }  
-    textObj.color.r = 255;
-    textObj.color.g = 255;
-    textObj.color.b = 255;
-    textObj.color.a = 255;
-    textObj.orgin_x = x;
-    while (text[textObj.length++] != '\0');
-    
-    
-    FT_Done_Face(face);
-    FT_Done_FreeType(flib);
-    
-    return textObj;
-    
-    
-    
-}
-
-void
-Compass_DrawTextRot(compass_text_t text, compass_renderer_t renderer, f32 rotation)
-{
-    
-    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
-    glActiveTexture(GL_TEXTURE0);
-    glBindVertexArray(handle->vao);
-    
-    
-    
-    
-    for (u32 c = 0; c < text.length ;c++){
-        
-        compass_glyph_t character = text.glyph[(s8)text.text[c]];
-        f32 xpos = text.x + character.glyph.bearing.x* text.scale ;
-        f32 ypos = text.y + (character.glyph.size.y + character.glyph.bearing.y ) - character.glyph.size.y - character.glyph.bearing.y- character.glyph.bearing.y* text.scale ; 
-        f32 h = character.glyph.size.y * text.scale ;
-        f32 w = character.glyph.size.x * text.scale;
-        
-        
-        
-        v4 vertex_a = (v4){xpos,ypos + h, 0};
-        
-        
-        v4 vertex_b = (v4){xpos,ypos,0};
-        
-        
-        
-        v4 vertex_c = (v4){xpos + w,ypos,0 };
-        
-        
-        
-        v4 vertex_d = (v4){xpos,ypos + h, 0};
-        
-        v4 vertex_e = (v4){xpos + w, ypos + h, 0};
-        
-        
-        
-        f32 cx = xpos+ w  / 2;
-        f32 cy = ypos + h / 2;
-        
-        f32 s = sin(rotation );
-        f32 c = cos(rotation );
-        
-        vertex_a.x -= cx;
-        vertex_a.y -= cy;
-        f32 xnewA = vertex_a.x * c -vertex_a.y * s;
-        f32 ynewA = vertex_a.x * s + vertex_a.y * c;
-        vertex_a.x = xnewA + cx;
-        vertex_a.y = ynewA + cy;
-        
-        
-        vertex_b.x -= cx;
-        vertex_b.y -= cy;
-        f32 xnewB = vertex_b.x * c -vertex_b.y * s;
-        f32 ynewB = vertex_b.x * s + vertex_b.y * c;
-        vertex_b.x = xnewB + cx;
-        vertex_b.y = ynewB + cy;
-        
-        
-        
-        vertex_c.x -= cx;
-        vertex_c.y -= cy;
-        f32 xnewC = vertex_c.x * c -vertex_c.y * s;
-        f32 ynewC = vertex_c.x * s + vertex_c.y * c;
-        vertex_c.x = xnewC + cx;
-        vertex_c.y = ynewC + cy;
-        
-        
-        vertex_d.x -= cx;
-        vertex_d.y -= cy;
-        f32 xnewD = vertex_d.x * c -vertex_d.y * s;
-        f32 ynewD = vertex_d.x * s + vertex_d.y * c;
-        vertex_d.x = xnewD + cx;
-        vertex_d.y = ynewD + cy;
-        
-        
-        
-        vertex_e.x -= cx;
-        vertex_e.y -= cy;
-        f32 xnewE = vertex_e.x * c -vertex_e.y * s;
-        f32 ynewE = vertex_e.x * s + vertex_e.y * c;
-        vertex_e.x = xnewE + cx;
-        vertex_e.y = ynewE + cy;
-        
-        
-        if (character.chars != '\0' ){
-            if (character.chars != '\n' ){
-                if (character.chars != '\t' ){
-                    f32 vertex_data[] =
-                    {
-                        vertex_a.x, vertex_a.y, vertex_a.z,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        0.0f, 1.0f,
-                        2,
-                        
-                        vertex_b.x, vertex_b.y, vertex_b.z,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0, 0.0f, 0.0f,
-                        2,
-                        vertex_c.x, vertex_c.y, vertex_c.z,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        
-                        1.0f, 0.0f,
-                        2,
-                        vertex_d.x , vertex_d.y, vertex_d.z,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        0.0f, 1.0f,
-                        2,
-                        xpos + w, ypos,0, 
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        1.0f, 0.0f,
-                        2,
-                        xpos + w, ypos + h, 0,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        1.0f, 1.0f,
-                        2
-                    };
-                    
-                    
-                    
-                    glBindTexture(GL_TEXTURE_2D, character.glyph.texture_id);
-                    
-                    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
-                    if (character.chars != '\n'){
-                        if (character.chars != '\0'){
-                            if (character.chars != '\t'){
-                                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_data), vertex_data);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        
-        glBindVertexArray(handle->vao);
-        
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        if (character.chars == '\t')
-        {
-            text.tabs++;
-            text.x += ( (s32)character.glyph.advance.x >> 6 ) *text.scale * 3;
-            
-            
-        }
-        if (character.chars == '\n')
-        {
-            text.y += ( (s32)text.size )* text.scale ;
-            text.x =  text.orgin_x ;
-            
-        } else
-        {
-            
-            text.x += ( (s32)character.glyph.advance.x >> 6 )* text.scale ;
-            
-        }
-        
-    }
-    
-}
-void
-Compass_FreeText(compass_text_t* text)
-{
-    free(text->glyph);
-}
-void
-Compass_DrawText(compass_text_t text, compass_renderer_t renderer)
-{
-    
-    
-    compass_opengl_handle_t* handle = (compass_opengl_handle_t*)renderer.graphics.handle; 
-    glActiveTexture(GL_TEXTURE0);
-    glBindVertexArray(handle->vao);
-    
-    for (u32 c = 0; c < text.length ;c++){
-        
-        compass_glyph_t character = text.glyph[(s8)text.text[c]];
-        f32 xpos = text.x + character.glyph.bearing.x* text.scale ;
-        f32 ypos = text.y + (character.glyph.size.y + character.glyph.bearing.y ) - character.glyph.size.y - character.glyph.bearing.y- character.glyph.bearing.y* text.scale ; 
-        f32 h = character.glyph.size.y * text.scale ;
-        f32 w = character.glyph.size.x * text.scale;
-        
-        if (character.chars != '\0' ){
-            if (character.chars != '\n' ){
-                if (character.chars != '\t' ){
-                    f32 vertex_data[] =
-                    {
-                        xpos,ypos + h, 0, 
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        0.0f, 1.0f,
-                        2,
-                        
-                        xpos,ypos,0,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0, 0.0f, 0.0f,
-                        2,
-                        xpos + w,ypos,0,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        
-                        1.0f, 0.0f,
-                        2,
-                        xpos,ypos + h, 0,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        0.0f, 1.0f,
-                        2,
-                        xpos + w, ypos,0, 
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        1.0f, 0.0f,
-                        2,
-                        xpos + w, ypos + h, 0,
-                        text.color.r / 255.0,text.color.g / 255.0,text.color.b / 255.0,text.color.a / 255.0,
-                        1.0f, 1.0f,
-                        2
-                    };
-                    
-                    
-                    
-                    glBindTexture(GL_TEXTURE_2D, character.glyph.texture_id);
-                    
-                    glBindBuffer(GL_ARRAY_BUFFER, handle->vbo);
-                    if (character.chars != '\n'){
-                        if (character.chars != '\0'){
-                            if (character.chars != '\t'){
-                                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertex_data), vertex_data);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        
-        glBindVertexArray(handle->vao);
-        
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        if (character.chars == '\t')
-        {
-            text.tabs++;
-            text.x += ( (s32)character.glyph.advance.x >> 6 ) *text.scale * 3;
-            
-            
-        }
-        if (character.chars == '\n')
-        {
-            text.y += ( (s32)text.size )* text.scale ;
-            text.x =  text.orgin_x ;
-            
-        } else
-        {
-            
-            text.x += ( (s32)character.glyph.advance.x >> 6 )* text.scale ;
-            
-        }
-        
-    }
-    
-    
-}
-
 
 void
 Compass_CreateFramebuffer(f32 w, f32 h, compass_framebuffer_t* framebuffer_object, compass_format_t color_model, u32 index)
@@ -1823,10 +1498,39 @@ Compass_GetVersion()
 
 
 
-#endif
+void
+Compass_DrawLine(compass_line_t line, compass_renderer_t renderer)
+{
+    
+    Compass_BeginDrawing(renderer);
+    
+    f32 vertex_data[] = {
+        line.x0, line.y0,0,
+        line.color.r / 255.0, 
+        line.color.g  / 255.0,line.color.b / 255.0,line.color.a / 255.0,
+        0,0,
+        0,
+        
+        line.x1, line.y1,0,
+        line.color.r / 255.0, 
+        line.color.g  / 255.0,line.color.b / 255.0,line.color.a / 255.0,
+        0,0,
+        0
+            
+    };
+    
+    
+    
+    Compass_PushVertex(vertex_data, sizeof(vertex_data),  renderer );
+    Compass_EndDrawing(COMPASS_DRAW_Line,renderer, 2);
+    Compass_EndTexture();
+    
+}
+
 
 #endif
 
 #endif
 
+#endif
 
