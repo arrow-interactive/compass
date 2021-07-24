@@ -19,8 +19,16 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 
 
 
-
+#ifndef COMPASS_SIN
 #include <math.h>
+#define COMPASS_SIN sin
+#endif
+
+
+#ifndef COMPASS_COS
+#include <math.h>
+#define COMPASS_COS cos
+#endif
 
 #ifndef COMPASS_MALLOC
 #include <stdlib.h>
@@ -45,7 +53,12 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 #define  COMPASS_PRINTF printf
 #endif
 
-#define COMPASS_VERSION "Compass Framework <1.1>" 
+#ifndef  COMPASS_STRCAT
+#include <string.h>
+#define  COMPASS_STRCAT strcat
+#endif
+
+#define COMPASS_VERSION "Compass Framework <1.2>" 
 #define COMPASS_DEVELOPMENT_BUILD 0
 
 
@@ -84,9 +97,9 @@ typedef struct {u32 r; u32 g; u32 b; u32 a;} Color;
 
 typedef struct {
     
-    u32 w;
-    u32 h;
-    s8* file_name;
+    f32 w;
+    f32 h;
+    u8* data;
     v2 left_top, left_bottom,  right_top, right_bottom;
     u32 texture;
     u32 texture_State;
@@ -267,9 +280,8 @@ Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 r
 COMPASS_API void 
 Compass_Clear(compass_renderer_t renderer);
 COMPASS_API compass_texture_t
-Compass_CreateTexture(s8* file_name, compass_image_flags_t imgFormat);
-COMPASS_API compass_texture_t
-Compass_CreateTexture(s8* file_name, compass_image_flags_t imgFormat);
+Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat);
+
 COMPASS_API compass_shader_t
 Compass_CreateShader(const s8* vertex, const s8* fragment);
 COMPASS_API void 
@@ -342,10 +354,87 @@ f32 Compass_Clamp(f32 value, f32 min_, f32 max_)
 }
 
 
-#ifdef COMPASS_BACKEND_OPENGL
+void
+Compass_LoadIdentityM4(m4 matrix)
+{
+    for (int x=0;x<4;x++){
+        for (int y=0;y<4;y++){
+            matrix[x][y] = 0;
+        }
+    }
+    
+}
+void
+Compass_RotationM4(m4 matrix, f32 rotation)
+{
+    
+    matrix[0][0] = COMPASS_COS(rotation * 3.14 / 180) ;
+    matrix[0][1] = -COMPASS_SIN(rotation* 3.14 / 180);
+    matrix[1][0] = COMPASS_SIN(rotation* 3.14 / 180) ;
+    matrix[1][1] = COMPASS_COS(rotation * 3.14 / 180);
+    matrix[2][3] = 1;
+    matrix[3][3] = 1;
+}
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
+
+void
+Compass_TranslateM4(m4 matrix, v2 translation)
+{
+    matrix[0][0] = 1;
+    matrix[1][1] = 1;
+    matrix[2][2] = 1;
+    matrix[3][0] = translation.x ;
+    matrix[3][1] = translation.y ;
+    matrix[3][2] = 1;
+    matrix[3][3] = 1;
+}
+
+void 
+Compass_M4xM4(m4 a , m4 b , m4 sum)
+{
+    
+    for (int x=0;x<4;x++){
+        for (int y=0;y<4;y++){
+            
+            sum[x][y] = a[x][y] * b[x][y];
+        }
+    }
+    
+}
+v4
+Compass_V4xM4(v4* vector  , m4 matrix)
+{
+    v4 res;
+    f32 sum =0;
+    sum += matrix[0][0] * vector->x;
+    sum += matrix[1][0] * vector->y;
+    sum += matrix[2][0] * vector->z;
+    sum += matrix[3][0] * vector->w;
+    res.x = sum;
+    sum = 0;
+    sum += matrix[0][1] * vector->x;
+    sum += matrix[1][1] * vector->y;
+    sum += matrix[2][1] * vector->z;
+    sum += matrix[3][1] * vector->w;
+    res.y = sum;
+    sum = 0;
+    sum += matrix[0][2] * vector->x;
+    sum += matrix[1][2] * vector->y;
+    sum += matrix[2][2] * vector->z;
+    sum += matrix[3][2] * vector->w;
+    res.z =sum;
+    sum = 0;
+    sum += matrix[0][3] * vector->x;
+    sum += matrix[1][3] * vector->y;
+    sum += matrix[2][3] * vector->z;
+    sum += matrix[3][3] * vector->w;
+    res.w = sum;
+    
+    return res;
+}
+
+
+#ifdef COMPASS_BACKEND_OPENGL
 
 
 
@@ -636,8 +725,8 @@ Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 r
     f32 cx =rectangle.x + rectangle.w / 2;
     f32 cy =rectangle.y + rectangle.h / 2;
     
-    f32 s = sin(rotation );
-    f32 c = cos(rotation );
+    f32 s = COMPASS_SIN(rotation );
+    f32 c = COMPASS_COS(rotation );
     
     vertex_a.x -= cx;
     vertex_a.y -= cy;
@@ -751,85 +840,6 @@ Compass_FreeRenderer(compass_renderer_t* renderer)
     
 }
 
-
-void
-Compass_LoadIdentityM4(m4 matrix)
-{
-    for (int x=0;x<4;x++){
-        for (int y=0;y<4;y++){
-            matrix[x][y] = 0;
-        }
-    }
-    
-}
-void
-Compass_RotationM4(m4 matrix, f32 rotation)
-{
-    
-    matrix[0][0] = cos(rotation * 3.14 / 180) ;
-    matrix[0][1] = -sin(rotation* 3.14 / 180);
-    matrix[1][0] = sin(rotation* 3.14 / 180) ;
-    matrix[1][1] = cos(rotation * 3.14 / 180);
-    matrix[2][3] = 1;
-    matrix[3][3] = 1;
-}
-
-
-void
-Compass_TranslateM4(m4 matrix, v2 translation)
-{
-    matrix[0][0] = 1;
-    matrix[1][1] = 1;
-    matrix[2][2] = 1;
-    matrix[3][0] = translation.x ;
-    matrix[3][1] = translation.y ;
-    matrix[3][2] = 1;
-    matrix[3][3] = 1;
-}
-
-void 
-Compass_M4xM4(m4 a , m4 b , m4 sum)
-{
-    
-    for (int x=0;x<4;x++){
-        for (int y=0;y<4;y++){
-            
-            sum[x][y] = a[x][y] * b[x][y];
-        }
-    }
-    
-}
-v4
-Compass_V4xM4(v4* vector  , m4 matrix)
-{
-    v4 res;
-    f32 sum =0;
-    sum += matrix[0][0] * vector->x;
-    sum += matrix[1][0] * vector->y;
-    sum += matrix[2][0] * vector->z;
-    sum += matrix[3][0] * vector->w;
-    res.x = sum;
-    sum = 0;
-    sum += matrix[0][1] * vector->x;
-    sum += matrix[1][1] * vector->y;
-    sum += matrix[2][1] * vector->z;
-    sum += matrix[3][1] * vector->w;
-    res.y = sum;
-    sum = 0;
-    sum += matrix[0][2] * vector->x;
-    sum += matrix[1][2] * vector->y;
-    sum += matrix[2][2] * vector->z;
-    sum += matrix[3][2] * vector->w;
-    res.z =sum;
-    sum = 0;
-    sum += matrix[0][3] * vector->x;
-    sum += matrix[1][3] * vector->y;
-    sum += matrix[2][3] * vector->z;
-    sum += matrix[3][3] * vector->w;
-    res.w = sum;
-    
-    return res;
-}
 
 void
 Compass_BeginDrawing(compass_renderer_t renderer )
@@ -986,22 +996,14 @@ Compass_FreeShader(compass_shader_t* shader)
     COMPASS_FREE(shader->shader_handle.handle);
 }
 
-compass_texture_t
-Compass_CreateTexture(s8* file_name, compass_image_flags_t imgFormat)
+COMPASS_API compass_texture_t
+Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat)
 {
     compass_texture_t texture;
-    texture.file_name = file_name;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    s32 w,h,nrchannel;
-    u8* data = (u8*)stbi_load(file_name, &w, &h, &nrchannel, 0);
-    if (data == NULL)
-    {
-        
-        COMPASS_PRINTF(" Compass Image:  Failed to load in image, \"%s\"\n", file_name);
-    }
     texture.w = w;
     texture.h = h;
     u32 texture_id;
@@ -1031,7 +1033,7 @@ Compass_CreateTexture(s8* file_name, compass_image_flags_t imgFormat)
     }
     glGenerateMipmap(GL_TEXTURE_2D);
     texture.texture = texture_id;
-    stbi_image_free(data);
+    
     
     texture.texture_State = 1;
     
@@ -1432,10 +1434,10 @@ Compass_SetShaderViewRotate(compass_shader_t* shader,compass_view_t* view, f32 r
     m4 RotateMatrix = {0};
     
     
-    RotateMatrix[0][0] = cos(rotate * 3.14 / 180) ;
-    RotateMatrix[0][1] = -sin(rotate* 3.14 / 180) ;
-    RotateMatrix[1][0] = sin(rotate* 3.14 / 180) ;
-    RotateMatrix[1][1] = cos(rotate* 3.14 / 180)  ;
+    RotateMatrix[0][0] = COMPASS_COS(rotate * 3.14 / 180) ;
+    RotateMatrix[0][1] = -COMPASS_SIN(rotate* 3.14 / 180) ;
+    RotateMatrix[1][0] = COMPASS_SIN(rotate* 3.14 / 180) ;
+    RotateMatrix[1][1] = COMPASS_COS(rotate* 3.14 / 180)  ;
     RotateMatrix[2][3] = 1;
     RotateMatrix[3][3] = 1;
     
@@ -1488,11 +1490,11 @@ s8*
 Compass_GetVersion()
 {
     
-    char* ver = COMPASS_VERSION;
-    const char* gl = glGetString(GL_VERSION);
-    char* final = {0};
-    final = strcat(ver,"  OpenGL Version: ");
-    final = strcat(ver,gl);
+    s8* ver = COMPASS_VERSION;
+    const s8* gl = glGetString(GL_VERSION);
+    s8* final = {0};
+    final = COMPASS_STRCAT(ver,"  OpenGL Version: ");
+    final = COMPASS_STRCAT(ver,gl);
     return final;
 }
 
