@@ -66,7 +66,7 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 
 
 #define COMPASS_VERSION "Compass Framework <1.2>" 
-#define COMPASS_DEVELOPMENT_BUILD 1
+#define COMPASS_DEVELOPMENT_BUILD 0
 
 
 
