@@ -1657,7 +1657,7 @@ Compass_FreeRenderer(compass_renderer_t* renderer)
 {
     compass_vulkan_handle_t* handle = (compass_vulkan_handle_t*)renderer->graphics.handle;
     vkDestroyInstance(handle->instance, 0);
-    free(renderer->graphics.handle);
+    COMPASS_FREE(renderer->graphics.handle);
 }
 
 
