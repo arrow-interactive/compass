@@ -1,4 +1,7 @@
-CompassGraphics
+
+
+
+
 /*
 Copyright © 2021 FOSSBAY / ARROW INTERACTIVE
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -8,9 +11,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
-
-
-
 
 */
 
@@ -58,8 +58,15 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 #define  COMPASS_STRCAT strcat
 #endif
 
+
+#ifndef  COMPASS_STRCPY
+#include <string.h>
+#define  COMPASS_STRCPY strcpy
+#endif
+
+
 #define COMPASS_VERSION "Compass Framework <1.2>" 
-#define COMPASS_DEVELOPMENT_BUILD 0
+#define COMPASS_DEVELOPMENT_BUILD 1
 
 
 
@@ -330,7 +337,6 @@ Compass_BeginTexture(compass_renderer_t renderer, compass_texture_t texture);
 COMPASS_API void 
 Compass_EndTexture();
 
-
 #ifdef COMPASS_IMPL_GFX
 
 
@@ -359,6 +365,7 @@ Compass_LoadIdentityM4(m4 matrix)
 {
     for (int x=0;x<4;x++){
         for (int y=0;y<4;y++){
+            
             matrix[x][y] = 0;
         }
     }
@@ -458,7 +465,7 @@ Compass_CreateRenderer(u32 w , u32 h)
 {
     
 #if COMPASS_DEVELOPMENT_BUILD == 1
-    printf("[Compass::Warning]: You're using a version of compass that is in development. To overwrite this message, set COMPASS_DEVELOPMENT_BUILD to zero. Things in here are subject to change.\n");
+    COMPASS_PRINTF("[Compass::Warning]: You're using a version of compass that is in development. To overwrite this message, set COMPASS_DEVELOPMENT_BUILD to zero. Things in here are subject to change.\n");
 #endif
     glEnable(GL_MULTISAMPLE);  
     glEnable(GL_BLEND);
@@ -552,12 +559,12 @@ Compass_CreateRenderer(u32 w , u32 h)
     
     renderer.view = Compass_CreateView(&renderer);
     
+    
     Compass_SetViewPosition(&renderer,&renderer.view, 0,0);
     Compass_SetViewScale(&renderer,&renderer.view, 1);
     Compass_SetViewRotate(&renderer,&renderer.view, 0); 
     return renderer;
 }
-
 
 u32
 Compass_GetUniformLocation(u32 programId, s8* name)
@@ -1002,8 +1009,8 @@ Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat)
     compass_texture_t texture;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     texture.w = w;
     texture.h = h;
     u32 texture_id;
@@ -1463,7 +1470,6 @@ Compass_SetShaderViewScale(compass_shader_t* shader,compass_view_t* view, f32 sc
 }
 
 
-
 void
 Compass_SetViewPosition(compass_renderer_t* renderer,compass_view_t* view, f32 x, f32 y)
 {
@@ -1489,12 +1495,15 @@ Compass_SetViewScale(compass_renderer_t* renderer,compass_view_t* view, f32 scal
 s8*
 Compass_GetVersion()
 {
+    s8* final = COMPASS_MALLOC(sizeof(s8) * 200);
+    COMPASS_STRCPY(final, COMPASS_VERSION);
     
-    s8* ver = COMPASS_VERSION;
-    const s8* gl = glGetString(GL_VERSION);
-    s8* final = {0};
-    final = COMPASS_STRCAT(ver,"  OpenGL Version: ");
-    final = COMPASS_STRCAT(ver,gl);
+    
+#if COMPASS_DEVELOPMENT_BUILD == 1
+    COMPASS_STRCAT(final, " [ DEVELOPMENT_BUILD ] ");
+#endif
+    COMPASS_STRCAT(final, " : (OpenGL Version): ");
+    COMPASS_STRCAT(final, glGetString(GL_VERSION));
     return final;
 }
 
