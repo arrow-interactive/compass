@@ -1,4 +1,7 @@
 
+
+
+
 /*
 Copyright © 2021 FOSSBAY / ARROW INTERACTIVE
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -9,10 +12,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 
-
-
-
 */
+
+
+
 
 #ifndef  COMPASS_GRAPHICS_H
 #define COMPASS_GRAPHICS_H
@@ -58,8 +61,23 @@ NOTE: Make sure your OpenGL context loader is LOADED before <CompassGraphics.h>
 #define  COMPASS_STRCAT strcat
 #endif
 
-#define COMPASS_VERSION "Compass Framework <1.2>" 
-#define COMPASS_DEVELOPMENT_BUILD 0
+
+#ifndef  COMPASS_STRCMP
+#include <string.h>
+#define  COMPASS_STRCMP strcmp
+#endif
+
+
+#ifndef  COMPASS_STRCPY
+#include <string.h>
+#define  COMPASS_STRCPY strcpy
+#endif
+
+#define COMPASS_VERSION_MAX 1
+#define COMPASS_VERSION_MIN 2
+
+#define COMPASS_VERSION "Compass Framework <2.0>" 
+#define COMPASS_DEVELOPMENT_BUILD 1
 
 
 
@@ -208,7 +226,13 @@ typedef enum
     COMPASS_DRAW_TriangleFan = 3
 } compass_draw_mode_t;
 
-
+#ifdef COMPASS_BACKEND_VULKAN
+typedef enum
+{
+    COMPASS_VK_INTEGRATED_GPU = 1 << 1,
+    COMPASS_VK_DISCRETE_GPU = 1 << 2 
+} compass_vulkan_graphics_card;
+#endif
 
 typedef enum {
     COMPASS_ZERO = 0,
@@ -235,6 +259,9 @@ typedef enum {
     COMPASS_Rgba = 1 << 1,
     COMPASS_Rgb = 1<< 2
 } compass_format_t;
+/* 
+* Utilities
+*/ 
 
 
 COMPASS_API f32 
@@ -245,43 +272,33 @@ COMPASS_API f32
 Compass_Min(f32 x, f32 y);
 COMPASS_API f32 
 Compass_Clamp(f32 value, f32 min_, f32 max_);
-COMPASS_API compass_view_t
-Compass_CreateView(compass_renderer_t* renderer);
+COMPASS_API void 
+Compass_Blend(compass_blend_factor_t  bf1, compass_blend_factor_t bf2);
+COMPASS_API s8*
+Compass_GetVersion();
+/* 
+* Renderer
+*/ 
+#ifdef COMPASS_BACKEND_VULKAN
+COMPASS_API compass_renderer_t 
+Compass_CreateVulkanRenderer(s8* apptitle, u32 extCount, const s8** exts, compass_vulkan_graphics_card graphicscard, f32 w, f32 h );
+#endif
+COMPASS_API compass_renderer_t 
+Compass_CreateRenderer(u32 w , u32 h);
 COMPASS_API void
-Compass_SetViewPosition(compass_renderer_t* renderer,compass_view_t* view, f32 x, f32 y);
-COMPASS_API void
-Compass_SetViewRotate(compass_renderer_t* renderer,compass_view_t* view, f32 rotate);
-COMPASS_API void
-Compass_SetViewScale(compass_renderer_t* renderer,compass_view_t* view, f32 scale);
+Compass_FreeRenderer(compass_renderer_t* renderer);
+COMPASS_API void 
+Compass_Clear(compass_renderer_t renderer);
+
+/* 
+* Shaders 
+*/
 COMPASS_API void
 Compass_SetShaderViewPosition(compass_shader_t* shader,compass_view_t* view, f32 x, f32 y);
 COMPASS_API void
 Compass_SetShaderViewRotate(compass_shader_t* shader,compass_view_t* view, f32 rotate);
 COMPASS_API void
 Compass_SetShaderViewScale(compass_shader_t* shader,compass_view_t* view, f32 scale);
-COMPASS_API compass_rect_t
-Compass_CreateRectangle(f32 w, f32 h, f32 x, f32 y );
-COMPASS_API void
-Compass_M4xM4(m4 a , m4 b, m4 sum);
-COMPASS_API void
-Compass_Viewport(f32 x, f32 y, f32 w, f32 h);
-COMPASS_API compass_renderer_t 
-Compass_CreateRenderer(u32 w , u32 h);
-COMPASS_API void
-Compass_FreeRenderer(compass_renderer_t* renderer);
-COMPASS_API void 
-Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer);
-COMPASS_API compass_line_t
-Compass_CreateLine(f32 x , f32 y, f32 x1 , f32 y1);
-COMPASS_API void
-Compass_DrawLine(compass_line_t line, compass_renderer_t renderer);
-COMPASS_API void 
-Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 rotation); /* NOTE(@rxx) Rotation is in radians. */
-COMPASS_API void 
-Compass_Clear(compass_renderer_t renderer);
-COMPASS_API compass_texture_t
-Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat);
-
 COMPASS_API compass_shader_t
 Compass_CreateShader(const s8* vertex, const s8* fragment);
 COMPASS_API void 
@@ -296,6 +313,63 @@ COMPASS_API void
 Compass_ShaderUniformM4(compass_shader_t* shader, s8* location, f32* matrix);
 COMPASS_API void 
 Compass_FreeShader(compass_shader_t* shader);
+
+/* 
+* View 
+*/
+COMPASS_API compass_view_t
+Compass_CreateView(compass_renderer_t* renderer);
+COMPASS_API void
+Compass_SetViewPosition(compass_renderer_t* renderer,compass_view_t* view, f32 x, f32 y);
+COMPASS_API void
+Compass_SetViewRotate(compass_renderer_t* renderer,compass_view_t* view, f32 rotate);
+COMPASS_API void
+Compass_SetViewScale(compass_renderer_t* renderer,compass_view_t* view, f32 scale);
+COMPASS_API void
+Compass_Viewport(f32 x, f32 y, f32 w, f32 h);
+/*
+*  Rectangles
+*/ 
+COMPASS_API compass_rect_t
+Compass_CreateRectangle(f32 w, f32 h, f32 x, f32 y );
+COMPASS_API void 
+Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer);
+COMPASS_API void 
+Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 rotation); /* NOTE(@rxx) Rotation is in radians. */
+
+/* 
+* Lines
+*/
+COMPASS_API compass_line_t
+Compass_CreateLine(f32 x , f32 y, f32 x1 , f32 y1);
+COMPASS_API void
+Compass_DrawLine(compass_line_t line, compass_renderer_t renderer);
+
+/*
+* Textures
+*/
+
+COMPASS_API compass_texture_t
+Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat);
+COMPASS_API compass_texture_t
+Compass_LoadTextTexture(f32 w, f32 h , u8* bytes);
+
+/*
+  * Matrices 
+*/
+COMPASS_API void
+Compass_M4xM4(m4 a , m4 b, m4 sum);
+COMPASS_API void
+Compass_RotationM4(m4 matrix, f32 rotation);
+COMPASS_API void
+Compass_LoadIdentityM4(m4 matrix);
+COMPASS_API v4
+Compass_V4xM4(v4* vector  , m4 matrix);
+COMPASS_API void
+Compass_TranslateM4(m4 matrix, v2 translation);
+/* 
+* Framebuffers
+*/
 COMPASS_API void
 Compass_CreateFramebuffer(f32 w, f32 h, compass_framebuffer_t* framebuffer_object,
                           compass_format_t color_model, u32 index);
@@ -307,18 +381,10 @@ COMPASS_API u32
 Compass_FramebufferGetError(compass_framebuffer_t framebuffer);
 COMPASS_API void 
 Compass_BindFrameBuffer(compass_framebuffer_t framebuffer);
-COMPASS_API void 
-Compass_Blend(compass_blend_factor_t  bf1, compass_blend_factor_t bf2);
-COMPASS_API void
-Compass_RotationM4(m4 matrix, f32 rotation);
-COMPASS_API void
-Compass_LoadIdentityM4(m4 matrix);
-COMPASS_API v4
-Compass_V4xM4(v4* vector  , m4 matrix);
-COMPASS_API void
-Compass_TranslateM4(m4 matrix, v2 translation);
-COMPASS_API s8*
-Compass_GetVersion();
+
+/* 
+* Shape Construction 
+*/
 COMPASS_API void
 Compass_BeginDrawing(compass_renderer_t renderer );
 COMPASS_API void
@@ -328,11 +394,31 @@ Compass_EndDrawing(compass_draw_mode_t draw_mode, compass_renderer_t renderer, f
 COMPASS_API void 
 Compass_BeginTexture(compass_renderer_t renderer, compass_texture_t texture);
 COMPASS_API void 
-Compass_EndTexture();
+Compass_EndTexture(); 
 
+/*
+* 
+* NOTE: If you are debugging your application, and say that it doesn't display anything using the vulkan
+* backend, you can enable vulkan validation layers using the COMPASS_DEBUG macros. ( Make sure to disable
+* this macro, as it'll add overhead to your program. )  < LunarSDK's Validation Layers. >
+* ________________________
+* IMPLEMENTATION
+* ________________________________
+* To make compass actually implementable, use "COMPASS_IMPL_GFX"
+* 
+ * To use a rendering backend please define either of the following.
+  * ( NOTE: anything with a `*` is currently in development and shouldn't be used. )
+* 
+*  RENDERING BACKENDS
+*  ________________________________
+*  Definition                    Version     
+*  1. COMPASS_BACKEND_OPENGL  |  >3.1    |
+*  -----------------------------------
+*  2. COMPASS_BACKEND_VULKAN* |  >1.1
+*
+*/ 
 
-#ifdef COMPASS_IMPL_GFX
-
+#if defined(COMPASS_IMPL_GFX)
 
 f32 Compass_Lerp(f32 start, f32 end , f32 amt)
 {
@@ -352,13 +438,14 @@ f32 Compass_Clamp(f32 value, f32 min_, f32 max_)
 {
     return Compass_Min(Compass_Max(value,min_), max_);
 }
-
-
 void
 Compass_LoadIdentityM4(m4 matrix)
 {
-    for (int x=0;x<4;x++){
-        for (int y=0;y<4;y++){
+    int x =0;
+    int y =0;
+    for ( x=0;x<4;x++){
+        for (y=0;y<4;y++){
+            
             matrix[x][y] = 0;
         }
     }
@@ -392,9 +479,10 @@ Compass_TranslateM4(m4 matrix, v2 translation)
 void 
 Compass_M4xM4(m4 a , m4 b , m4 sum)
 {
-    
-    for (int x=0;x<4;x++){
-        for (int y=0;y<4;y++){
+    int x=0;
+    int y=0;
+    for (x=0;x<4;x++){
+        for ( y=0;y<4;y++){
             
             sum[x][y] = a[x][y] * b[x][y];
         }
@@ -458,7 +546,7 @@ Compass_CreateRenderer(u32 w , u32 h)
 {
     
 #if COMPASS_DEVELOPMENT_BUILD == 1
-    printf("[Compass::Warning]: You're using a version of compass that is in development. To overwrite this message, set COMPASS_DEVELOPMENT_BUILD to zero. Things in here are subject to change.\n");
+    COMPASS_PRINTF("[Compass::Warning]: You're using a version of compass that is in development. To overwrite this message, set COMPASS_DEVELOPMENT_BUILD to zero. Things in here are subject to change.\n");
 #endif
     glEnable(GL_MULTISAMPLE);  
     glEnable(GL_BLEND);
@@ -552,21 +640,21 @@ Compass_CreateRenderer(u32 w , u32 h)
     
     renderer.view = Compass_CreateView(&renderer);
     
+    
     Compass_SetViewPosition(&renderer,&renderer.view, 0,0);
     Compass_SetViewScale(&renderer,&renderer.view, 1);
     Compass_SetViewRotate(&renderer,&renderer.view, 0); 
     return renderer;
 }
 
-
 u32
 Compass_GetUniformLocation(u32 programId, s8* name)
 {
     u32 location = -1;
-    
+    int i = 0;
     static u64 last = 0;
     static compass_uniform_cache_t locations[128] = {0};
-    for (int i = 0; i < 128; ++i)
+    for (i=0; i < 128; ++i)
         if (locations[i].key == name)
         location = locations[i].value;
     
@@ -612,7 +700,7 @@ Compass_ReloadShaderUniforms(compass_shader_t* shader, u32 w, u32 h)
     matrix[3][3] = 1;
     
     Compass_UseShader(shader);
-    Compass_ShaderUniformM4(shader, "Compass_ViewOrthographic" , (f32*)matrix );
+    Compass_ShaderUniformM4(shader, (s8*)"Compass_ViewOrthographic" , (f32*)matrix );
 }
 
 compass_rect_t
@@ -1002,8 +1090,8 @@ Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat)
     compass_texture_t texture;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     texture.w = w;
     texture.h = h;
     u32 texture_id;
@@ -1046,8 +1134,8 @@ Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat)
     
 }
 
-COMPASS_API compass_texture_t
-Compass_LoadTextTexture(f32 w, f32 h , unsigned char* bytes)
+compass_texture_t
+Compass_LoadTextTexture(f32 w, f32 h , u8* bytes)
 {
     compass_texture_t texture;
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1); 
@@ -1463,7 +1551,6 @@ Compass_SetShaderViewScale(compass_shader_t* shader,compass_view_t* view, f32 sc
 }
 
 
-
 void
 Compass_SetViewPosition(compass_renderer_t* renderer,compass_view_t* view, f32 x, f32 y)
 {
@@ -1489,12 +1576,15 @@ Compass_SetViewScale(compass_renderer_t* renderer,compass_view_t* view, f32 scal
 s8*
 Compass_GetVersion()
 {
+    s8* final = COMPASS_MALLOC(sizeof(s8) * 200);
+    COMPASS_STRCPY(final, COMPASS_VERSION);
     
-    s8* ver = COMPASS_VERSION;
-    const s8* gl = glGetString(GL_VERSION);
-    s8* final = {0};
-    final = COMPASS_STRCAT(ver,"  OpenGL Version: ");
-    final = COMPASS_STRCAT(ver,gl);
+    
+#if COMPASS_DEVELOPMENT_BUILD == 1
+    COMPASS_STRCAT(final, " [ DEVELOPMENT_BUILD ] ");
+#endif
+    COMPASS_STRCAT(final, " : (OpenGL Version): ");
+    COMPASS_STRCAT(final, glGetString(GL_VERSION));
     return final;
 }
 
@@ -1528,6 +1618,479 @@ Compass_DrawLine(compass_line_t line, compass_renderer_t renderer)
     Compass_EndTexture();
     
 }
+#elif defined(COMPASS_BACKEND_VULKAN)
+
+
+#if COMPASS_DEVELOPMENT_BUILD == 0
+#error This rendering API is not implemented fully, to bypass this message and use a unstable rendering API, please enable COMPASS_DEVELOPMENT_BUILD.
+#endif
+
+typedef struct
+{
+    VkInstance instance;
+    VkSurfaceKHR WindowSurface;
+    VkPhysicalDevice physical_device;
+    VkDevice logical_device;
+    struct
+    {
+        u32 family;
+    } gfxFamily;
+    \
+    
+} compass_vulkan_handle_t;
+void
+Compass_Viewport(f32 x, f32 y, f32 w, f32 h)
+{
+}
+
+/*
+TODO --- 
+Todo for Compass_CreateVulkanRenderer
+ - Validation Layers. 
+- Window SUrface 
+- Swap chain
+- Image view 
+
+*/
+
+COMPASS_API compass_renderer_t 
+Compass_CreateVulkanRenderer(s8* apptitle, u32 extCount, const s8** exts, compass_vulkan_graphics_card graphicscard, f32 w, f32 h )
+{
+    
+    
+    
+    compass_renderer_t vkrenderer = {0};
+    vkrenderer.graphics.handle = COMPASS_MALLOC(sizeof(compass_vulkan_handle_t));
+    compass_vulkan_handle_t* handle = (compass_vulkan_handle_t*)vkrenderer.graphics.handle;
+    handle->physical_device = VK_NULL_HANDLE;
+    /* Initializing Vulkan */
+    VkApplicationInfo application_information= {0};
+    application_information.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    application_information.pApplicationName = apptitle; /* NOTE:(@rxx): In the future, make the user provide this data. */
+    application_information.applicationVersion = VK_MAKE_VERSION(1,0, 0);
+    application_information.pEngineName = "compass framework";
+    application_information.engineVersion = VK_MAKE_VERSION(COMPASS_VERSION_MAX, COMPASS_VERSION_MIN, 0);
+    application_information.apiVersion = VK_API_VERSION_1_1;
+    
+    VkInstanceCreateInfo instance_create_info = {0};
+    instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instance_create_info.pApplicationInfo = &application_information;
+    instance_create_info.enabledExtensionCount = extCount;
+    instance_create_info.ppEnabledExtensionNames = exts;
+    
+    
+    
+#ifdef COMPASS_DEBUG
+    
+    const s8** validation_layers = COMPASS_MALLOC(sizeof(s8**) * 5);
+    u32 validation_layers_size = 5;
+    u32 validation_layers_used = 0; 
+    validation_layers[validation_layers_used++] = "VK_LAYER_KHRONOS_validation";
+    
+    u32 layers;
+    vkEnumerateInstanceLayerProperties(&layers, 0);
+    
+    VkLayerProperties* LayerProperties = COMPASS_MALLOC(sizeof(VkLayerProperties) * layers);
+    if (LayerProperties == NULL)  COMPASS_PRINTF("[compass:vk]: Failed to allocate VkLayerProperties."); 
+    vkEnumerateInstanceLayerProperties(&layers, LayerProperties );
+    u32 does_validation_layer_exist;
+    for (u32 i = 0;  i < validation_layers_used ;i++)
+    {
+        does_validation_layer_exist = 0;
+        printf("Value: %s\n", LayerProperties->layerName);
+        if (COMPASS_STRCMP(validation_layers[i], LayerProperties->layerName) == 0)
+        {
+            does_validation_layer_exist = 1;
+            break;
+        }
+        if (does_validation_layer_exist == 0) {
+            
+            COMPASS_PRINTF("[compass:vk] : Couldn't request: {%s} validation layer. -- Perhaps try installing the LunarG SDK\n" , validation_layers[i]); 
+            
+        }
+        
+    }
+    
+    
+    instance_create_info.enabledLayerCount = (u32)validation_layers_used;
+    instance_create_info.ppEnabledLayerNames = validation_layers;
+    
+    
+#endif
+    
+    
+    if ((vkCreateInstance(&instance_create_info, 0, &handle->instance) != VK_SUCCESS))
+    {
+        COMPASS_PRINTF("[compass:vk] Compass couldn't create a instance for vulkan ( vkInstance ) ");
+    }
+    
+    
+    u32 devices;
+    vkEnumeratePhysicalDevices(handle->instance, &devices, 0);
+    
+    
+    if (devices <= 0)
+    {
+        COMPASS_PRINTF("[compass:vk] Couldn't find any GPU with vulkan support, (Make sure your drivers are up to date!)"); 
+    }
+    VkPhysicalDevice* physicaldevices = COMPASS_MALLOC(sizeof(VkPhysicalDevice) * devices);
+    if (physicaldevices == NULL)
+    {
+        COMPASS_PRINTF("[compass:vk] Failed to allocated VkPhysicalDevice(s)");
+    }
+    
+    vkEnumeratePhysicalDevices(handle->instance, &devices, physicaldevices);
+    
+    for (s32 i = 0; i < devices ; i++)
+    {
+        
+        
+        VkPhysicalDeviceProperties dp;
+        vkGetPhysicalDeviceProperties(physicaldevices[i], &dp);
+        
+        VkPhysicalDeviceFeatures features;
+        vkGetPhysicalDeviceFeatures(physicaldevices[i ], &features);
+        
+        if (graphicscard == COMPASS_VK_DISCRETE_GPU && dp.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && features.geometryShader){
+            /* Discrete graphics. */
+            handle->physical_device = physicaldevices[i];
+            
+        } 
+        if (graphicscard == COMPASS_VK_INTEGRATED_GPU && dp.deviceType ==   VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU&& features.geometryShader)
+        {
+            /* intergrated graphics. */
+            handle->physical_device = physicaldevices[i ];
+            
+        }
+        
+    }
+    
+    if ( handle->physical_device == VK_NULL_HANDLE)
+    {
+        COMPASS_PRINTF("[compass:vk] Couldn't select a physical device with Vulkan support. (Perhaps update your drivers?)");
+        
+    }
+    
+    /* Graphics Queue Family */
+    
+    
+    u32 queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(handle-> physical_device, &queue_family_count, 0);
+    
+    
+    VkQueueFamilyProperties* QueueProperties = COMPASS_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
+    if (QueueProperties == NULL) { COMPASS_PRINTF("[Compass:vk] : Failed to allocate VkQueueFamilyProperties"); 
+    }
+    vkGetPhysicalDeviceQueueFamilyProperties(handle->physical_device, &queue_family_count, QueueProperties);
+    
+    for (int i=0;i < queue_family_count;i++)
+    {
+        if (QueueProperties->queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            handle->gfxFamily.family = i;
+        }
+        
+    }
+    
+    
+    
+    
+    /* Logical devices */
+    f32 qp = 1;
+    VkDeviceQueueCreateInfo QueueInfo = {0};
+    QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueInfo.queueCount = 1;
+    QueueInfo.queueFamilyIndex = handle->gfxFamily.family;
+    QueueInfo.pQueuePriorities = &qp ;
+    
+    
+    VkPhysicalDeviceFeatures df = {0};
+    
+    VkDeviceCreateInfo cf = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+    cf.pQueueCreateInfos = &QueueInfo;
+    cf.queueCreateInfoCount = QueueInfo.queueCount;
+    cf.pEnabledFeatures = &df;
+    
+    cf.enabledExtensionCount = 0;
+    
+#ifdef COMPASS_DEBUG
+    cf.enabledLayerCount = (u32)validation_layers_used;
+    cf.ppEnabledLayerNames = validation_layers;
+#endif
+    
+    if (vkCreateDevice(handle->physical_device, &cf, 0, &handle->logical_device) != VK_SUCCESS)
+    {
+        COMPASS_PRINTF("[compass:vk] Couldn't create a logical device.");
+    }
+    
+    
+    return vkrenderer;
+    
+}
+void
+Compass_FreeRenderer(compass_renderer_t* renderer)
+{
+    compass_vulkan_handle_t* handle = (compass_vulkan_handle_t*)renderer->graphics.handle;
+    vkDestroyDevice(handle->logical_device, 0);
+    vkDestroyInstance(handle->instance, 0);
+    COMPASS_FREE(renderer->graphics.handle);
+}
+
+
+u32
+Compass_GetUniformLocation(u32 programId, s8* name)
+{
+    
+}
+
+compass_line_t
+Compass_CreateLine(f32 x , f32 y, f32 x1 , f32 y1)
+{
+    
+}
+void
+Compass_ReloadShaderUniforms(compass_shader_t* shader, u32 w, u32 h)
+{
+    
+}
+
+compass_rect_t
+Compass_CreateRectangle(f32 w, f32 h, f32 x, f32 y )
+{
+    
+    
+}
+
+
+void 
+Compass_UseShader(compass_shader_t* shader)
+{
+    
+}
+void 
+Compass_DrawRect(compass_rect_t rectangle, compass_renderer_t renderer)
+{
+    
+    
+}
+
+
+
+void 
+Compass_DrawRectRot(compass_rect_t rectangle, compass_renderer_t renderer, f32 rotation)
+{
+    
+    
+}
+
+
+void 
+Compass_ShaderUniform1i(compass_shader_t* shader, s8* location , s32 _val)
+{
+    
+}
+
+void 
+Compass_Clear(compass_renderer_t renderer)
+{
+    
+    
+}
+
+
+void
+Compass_BeginDrawing(compass_renderer_t renderer )
+{
+    
+}
+
+
+
+void
+Compass_PushVertex(f32* vertices, s32 size ,  compass_renderer_t renderer )
+{
+    
+    
+}
+
+
+
+void
+Compass_EndDrawing(compass_draw_mode_t draw_mode, compass_renderer_t renderer, f32 vertex_count )
+{
+    
+}
+
+
+
+void 
+Compass_BeginTexture(compass_renderer_t renderer, compass_texture_t texture)
+{
+    
+    
+    
+}
+
+void 
+Compass_EndTexture()
+{
+    
+}
+
+
+
+compass_shader_t
+Compass_CreateShader(const s8* vertex, const s8* fragment)
+{
+    
+    
+}
+
+
+void
+Compass_ShaderUniformM4(compass_shader_t* shader, s8* location, f32* matrix)
+{
+    
+}
+
+
+
+void 
+Compass_FreeShader(compass_shader_t* shader)
+{
+    
+}
+
+COMPASS_API compass_texture_t
+Compass_CreateTexture(f32 w, f32 h, u8* data, compass_image_flags_t imgFormat)
+{
+    
+    
+}
+
+COMPASS_API compass_texture_t
+Compass_LoadTextTexture(f32 w, f32 h , u8* bytes)
+{
+    
+}
+
+void
+Compass_CreateFramebuffer(f32 w, f32 h, compass_framebuffer_t* framebuffer_object, compass_format_t color_model, u32 index)
+{
+    
+    
+    
+    
+}
+
+
+void 
+Compass_BindDefaultFrameBuffer()
+{
+    
+    
+}
+
+
+void 
+Compass_BindFrameBuffer(compass_framebuffer_t framebuffer)
+{
+    
+    
+}
+
+
+void
+Compass_CreateRenderbuffer(compass_framebuffer_t* framebuffer)
+{
+    
+}
+
+u32 
+Compass_FramebufferGetError(compass_framebuffer_t framebuffer)
+{
+    
+}
+
+void 
+Compass_Blend(compass_blend_factor_t  bf1, compass_blend_factor_t bf2)
+{
+    
+    
+    
+}
+
+
+
+void  
+Compass_ShaderUniformSampler2D(compass_shader_t* shader, s8* location , compass_texture_t* val)
+{
+    
+}
+
+
+compass_view_t
+Compass_CreateView(compass_renderer_t* renderer)
+{
+    
+}
+
+
+
+
+void
+Compass_SetShaderViewPosition(compass_shader_t* shader,compass_view_t* view, f32 x, f32 y)
+{
+    
+}
+
+void
+Compass_SetShaderViewRotate(compass_shader_t* shader,compass_view_t* view, f32 rotate)
+{
+    
+}
+
+void
+Compass_SetShaderViewScale(compass_shader_t* shader,compass_view_t* view, f32 scale)
+{
+    
+}
+
+
+void
+Compass_SetViewPosition(compass_renderer_t* renderer,compass_view_t* view, f32 x, f32 y)
+{
+}
+
+
+void
+Compass_SetViewRotate(compass_renderer_t* renderer,compass_view_t* view, f32 rotate)
+{
+    
+}
+
+
+
+void
+Compass_SetViewScale(compass_renderer_t* renderer,compass_view_t* view, f32 scale)
+{
+    
+}
+
+
+s8*
+Compass_GetVersion()
+{
+    
+}
+
+
+
+void
+Compass_DrawLine(compass_line_t line, compass_renderer_t renderer)
+{
+    
+}
 
 
 #endif
@@ -1535,4 +2098,3 @@ Compass_DrawLine(compass_line_t line, compass_renderer_t renderer)
 #endif
 
 #endif
-
